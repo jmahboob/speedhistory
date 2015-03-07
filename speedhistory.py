@@ -1,7 +1,12 @@
-import os
-import sqlite3
 import speedtest_cli
+import sys, os
+import sqlite3
 import time
+
+# At the moment, this main function from the library initializes a few global variables
+# related to threads that are necessary to cleanly ctrl-c
+# Either need to clean this up so this can be removed or strip the functionality from the library
+speedtest_cli.speedtest()
 
 # First connect to the local sqlite db
 # File is created if it doesn't exist in the local directory
@@ -17,48 +22,61 @@ urls = []
 for size in sizes:
 	for i in range(0, 4):
 		urls.append('%s/random%sx%s.jpg' % (os.path.dirname(best['url']), size, size))
-print sizes
-print urls
+
+ulsizesizes = [int(.25 * 1000 * 1000), int(.5 * 1000 * 1000)]
+ulsizes = []
+for ulsize in ulsizesizes:
+	for i in range(0, 25):
+		ulsizes.append(ulsize)
+
 
 # Time to actually do this
-epoch = int(time.time())
-dlspeed = speedtest_cli.downloadSpeed(urls, True)
-#ulspeed = speedtest_cli.uploadSpeed(urls, sizes, True)
-ulspeed = 0
+for i in range(10):
 
-# Build the tuple we'll be inserting into the table
-# Table Structure
-#	date - int
-#	latency - real
-#	name - text
-#	lon - real
-#	lat - real
-#	rawdl - real
-#	rawul - real
-#	convdl - real
-#	convul - real
-line = (epoch, best['latency'], best['name'], best['lon'], best['lat'], dlspeed, ulspeed)
+	epoch = int(time.time())
 
-c = conn.cursor()
+	sys.stdout.write("Downloading...")
+	dlspeed = speedtest_cli.downloadSpeed(urls, False)
+	convdl = (dlspeed / 1000 / 1000) * 8
+	print "Speed - %0.2f Mbit/s" % convdl
 
-try:
-	c.execute (''' create table tests
-		(int epoch,
-		real latency,
-		name text,
-		lon real,
-		lat real,
-		rawdl real,
-		rawul real)
-	''')
-except sqlite3.OperationalError:
-	pass
+	sys.stdout.write("Uploading...")
+	ulspeed = speedtest_cli.uploadSpeed(best['url'], ulsizes, False)
+	convul = (ulspeed / 1000 / 1000) * 8
+	print "Speed - %0.2f Mbit/s\n" % convul
 
-print 'Hurray\n'
-print dlspeed
+	# Build the tuple we'll be inserting into the table
+	# Table Structure
+	#	date - int
+	#	latency - real
+	#	name - text
+	#	lon - real
+	#	lat - real
+	#	rawdl - real
+	#	rawul - real
+	#	convdl - real
+	#	convul - real
+	line = (epoch, best['latency'], best['name'], best['lon'], best['lat'], dlspeed, ulspeed, convdl, convul)
 
-c.execute('insert into tests values (?,?,?,?,?,?,?)', line)
+	c = conn.cursor()
 
-conn.commit()
+	try:
+		c.execute (''' create table tests
+			(int epoch,
+			real latency,
+			name text,
+			lon real,
+			lat real,
+			rawdl real,
+			rawul real,
+			convdl real,
+			convul real)
+		''')
+	except sqlite3.OperationalError:
+		pass
+
+	c.execute('insert into tests values (?,?,?,?,?,?,?,?,?)', line)
+
+	conn.commit()
 
 c.close()
